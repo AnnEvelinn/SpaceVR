@@ -2,40 +2,150 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>My First VR Scene</title>
-    <meta name="description" content="VR Workshop Demo">
-
-    <!-- A-Frame Library — This is the engine that powers our VR world -->
-    <!-- Think of it like downloading a game engine (Unity/Unreal) but in one line -->
-    <script src="https://aframe.io/releases/1.7.1/aframe.min.js"></script>
-  </head>
-
-  <body>
-    <!-- a-scene = Your entire VR World (like a Minecraft world or Fortnite map) -->
-    <a-scene>
-
-      <!-- ====== SCENE OBJECTS ====== -->
-      <!-- These are like placing furniture in a room -->
-
-      <!-- Box: Like a Rubik's cube floating in the air -->
-    <a-box
-  position="-1 0.5 -3"
-  src="https://cdn.aframe.io/a-painter/images/wood.jpg">
-</a-box>
-
-<!-- Brick textured sphere -->
-<a-sphere
-  position="0 1.25 -5"
-  radius="1.25"
-  src="https://cdn.aframe.io/a-painter/images/brick.jpg">
-</a-sphere>
-
-<!-- 360 city sky — wraps around you like a dome -->
-<a-sky src="https://cdn.aframe.io/360-image-gallery-boilerplate/img/city.jpg"></a-sky>
-
-      <!-- Sphere: Like a basketball -->
+    <title>VR Alien Shooter - Game Over & Sound</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     
+    <script>
+      // Synthesize a classic "Pew!" laser sound using the browser's Web Audio API
+      function playLaserSound() {
+        // Create an audio context
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return; // Failsafe for older browsers
+        const audioCtx = new AudioContext();
+        
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        // Use a square wave for that retro 8-bit sound
+        oscillator.type = 'square';
+        
+        // Sweep the frequency down rapidly to create the "pew"
+        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); 
+        oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.15); 
+        
+        // Fade the volume out quickly
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); 
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15); 
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        // Play the sound for 0.15 seconds
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.15);
+      }
 
+      // Register the Game Manager
+      AFRAME.registerComponent('game-manager', {
+        init: function () {
+          this.score = 0;
+          this.isGameOver = false;
+          
+          this.scoreText = document.querySelector('#score-display');
+          this.gameOverText = document.querySelector('#game-over-display');
+          this.alienContainer = document.querySelector('#alien-container');
+          
+          // Listen for clicks on the whole scene to trigger the laser sound
+          this.el.addEventListener('click', () => {
+            if (!this.isGameOver) {
+              playLaserSound();
+            }
+          });
+          
+          // Spawn the initial aliens
+          for (let i = 0; i < 5; i++) {
+            setTimeout(() => this.spawnAlien(), i * 1000);
+          }
+        },
+
+        spawnAlien: function () {
+          if (this.isGameOver) return; // Stop spawning if the game is over
+
+          let alien = document.createElement('a-sphere');
+          alien.setAttribute('color', '#39FF14');
+          alien.setAttribute('radius', '0.5');
+          alien.setAttribute('class', 'clickable'); 
+          
+          let angle = Math.random() * Math.PI * 2;
+          let distance = 20;
+          let startX = Math.cos(angle) * distance;
+          let startZ = Math.sin(angle) * distance;
+          let startY = Math.random() * 4 + 1; 
+          
+          alien.setAttribute('position', `${startX} ${startY} ${startZ}`);
+
+          // Give aliens a slightly random speed between 4 and 8 seconds
+          let speed = Math.floor(Math.random() * 4000) + 4000; 
+          alien.setAttribute('animation', `property: position; to: 0 1.6 0; dur: ${speed}; easing: linear;`);
+
+          // When you shoot an alien
+          alien.addEventListener('click', () => {
+            if (this.isGameOver) return;
+            
+            alien.parentNode.removeChild(alien);
+            this.score += 10;
+            this.scoreText.setAttribute('value', `Score: ${this.score}`);
+            this.spawnAlien(); // Spawn a replacement
+          });
+
+          // If the alien finishes its animation (reaches the player's face)
+          alien.addEventListener('animationcomplete', () => {
+            if (alien.parentNode && !this.isGameOver) {
+              this.triggerGameOver();
+            }
+          });
+
+          this.alienContainer.appendChild(alien);
+        },
+
+        triggerGameOver: function () {
+          this.isGameOver = true;
+          
+          // Hide the score and show the Game Over text
+          this.scoreText.setAttribute('value', '');
+          this.gameOverText.setAttribute('value', `GAME OVER\nFinal Score: ${this.score}\n\nRefresh page to play again`);
+          
+          // Delete all remaining aliens from the scene
+          while (this.alienContainer.firstChild) {
+            this.alienContainer.removeChild(this.alienContainer.firstChild);
+          }
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <a-scene game-manager>
+      
+      <a-assets>
+        <img id="space-texture" src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Starlight_VR.jpg/4096px-Starlight_VR.jpg" crossorigin="anonymous">
+      </a-assets>
+
+      <a-sky src="#space-texture"></a-sky>
+      <a-entity id="alien-container"></a-entity>
+
+      <a-entity camera look-controls position="0 1.6 0">
+        
+        <a-cursor color="#FF0000" raycaster="objects: .clickable"></a-cursor>
+
+        <a-text 
+          id="score-display" 
+          value="Score: 0" 
+          position="0 -0.5 -1" 
+          align="center" 
+          color="#FFFFFF" 
+          width="3">
+        </a-text>
+
+        <a-text 
+          id="game-over-display" 
+          value="" 
+          position="0 0 -1.5" 
+          align="center" 
+          color="#FF0000" 
+          width="4">
+        </a-text>
+
+      </a-entity>
     </a-scene>
   </body>
 </html>
